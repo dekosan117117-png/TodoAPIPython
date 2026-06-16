@@ -3,6 +3,9 @@ from models import Todo
 from database import SessionLocal, engine
 from fastapi import FastAPI, HTTPException, Depends
 from sqlalchemy.orm import Session
+from apscheduler.schedulers.background import BackgroundScheduler
+from datetime import date
+
 
 def get_db():
     db = SessionLocal()
@@ -12,6 +15,26 @@ def get_db():
         db.close()
 
 app = FastAPI()
+
+scheduler = BackgroundScheduler()
+def update_priority():
+    db = SessionLocal()
+    try:
+        # ここでDBからデータ取得してループ処理
+        todos = db.query(Todo).all()
+        for todo in todos:
+            # 期限が近いものは優先度を上げる
+            if todo.expiry_date and (todo.expiry_date - date.today()).days < 3:
+                todo.priority = 5
+            elif todo.expiry_date and (todo.expiry_date - date.today()).days < 5:
+                todo.priority = 3
+            
+        db.commit()
+    finally:
+        db.close()
+
+scheduler.add_job(update_priority, "interval", minutes=1)
+scheduler.start()
 
 @app.get("/todos")
 def get_todos(db: Session = Depends(get_db)):
