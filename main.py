@@ -1,5 +1,3 @@
-
-from datetime import datetime_CAPI
 from schemas import TodoCreate
 from models import Todo
 from database import SessionLocal, engine
