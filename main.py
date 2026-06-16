@@ -1,51 +1,55 @@
 
-from datetime import date
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
+from datetime import datetime_CAPI
+from schemas import TodoCreate
+from models import Todo
+from database import SessionLocal, engine
+from fastapi import FastAPI, HTTPException, Depends
+from sqlalchemy.orm import Session
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 app = FastAPI()
 
-class TodoCreate(BaseModel):
-    title: str
-    done: bool = False
-    priority: int = 1
-    expiry_date: date = None
-
-todos = []
-next_id = 1
-
 @app.get("/todos")
-def get_todos():
-    return todos
+def get_todos(db: Session = Depends(get_db)):
+    return db.query(Todo).all()
 
 @app.post("/todos", status_code=201)
-def create_todo(todo: TodoCreate):
-    global next_id
-    new_todo = {"id": next_id, 
-                "title": todo.title, 
-                "done": todo.done, 
-                "priority": todo.priority, 
-                "expiry_date": todo.expiry_date
-                }
-    todos.append(new_todo)
-    next_id += 1
+def create_todo(todo: TodoCreate, db: Session = Depends(get_db)):
+    new_todo = Todo(
+        title=todo.title,
+        done=todo.done,
+        priority=todo.priority,
+        expiry_date=todo.expiry_date
+    )
+    db.add(new_todo)
+    db.commit()
+    db.refresh(new_todo)
     return new_todo
 
 @app.put("/todos/{todo_id}")
-def update_todo(todo_id: int, todo: TodoCreate):
-    for t in todos:
-        if t["id"] == todo_id:
-            t["title"] = todo.title
-            t["done"] = todo.done
-            t["priority"] = todo.priority
-            t["expiry_date"] = todo.expiry_date
-            return t
-    raise HTTPException(status_code=404, detail="そのIDは存在しないよ！")
+def update_todo(todo_id: int, todo: TodoCreate, db: Session = Depends(get_db)):
+    db_todo = db.query(Todo).filter(Todo.id == todo_id).first()
+    if not db_todo:
+        raise HTTPException(status_code=404, detail="そのIDは存在しないよ！")
+    db_todo.title = todo.title
+    db_todo.done = todo.done
+    db_todo.priority = todo.priority
+    db_todo.expiry_date = todo.expiry_date
+    db.commit()
+    db.refresh(db_todo)
+    return db_todo
 
 @app.delete("/todos/{todo_id}")
-def delete_todo(todo_id: int):
-    for i, t in enumerate(todos):
-        if t["id"] == todo_id:
-            todos.pop(i)
-            return {"message": "削除したよ！"}
-    raise HTTPException(status_code=404, detail="そのIDは存在しないよ！")
+def delete_todo(todo_id: int, db: Session = Depends(get_db)):
+    db_todo = db.query(Todo).filter(Todo.id == todo_id).first()
+    if not db_todo:
+        raise HTTPException(status_code=404, detail="そのIDは存在しないよ！")
+    db.delete(db_todo)
+    db.commit()
+    return {"message": "削除したよ！"} 
