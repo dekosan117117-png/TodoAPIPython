@@ -1,5 +1,5 @@
 from schemas import TodoCreate
-from models import Todo
+from models import Todo, Setting
 from database import SessionLocal, engine
 from fastapi import FastAPI, HTTPException, Depends
 from sqlalchemy.orm import Session
@@ -7,9 +7,9 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from datetime import date
 import os
 from dotenv import load_dotenv
+from datetime import datetime
 
 load_dotenv()
-
 
 def get_db():
     db = SessionLocal()
@@ -19,6 +19,28 @@ def get_db():
         db.close()
 
 app = FastAPI()
+
+def init_settings():
+    db = SessionLocal()
+    try:
+        default_settings = [
+            {"key": "notify_hour", "value": "8"},
+            {"key": "renotify_hour", "value": "14"},
+            {"key": "notify_enabled", "value": "true"},
+            {"key": "last_notified_at", "value": None},
+            {"key": "line_user_id", "value": None},
+        ]
+        for setting in default_settings:
+            # 既に存在する場合はスキップ
+            exists = db.query(Setting).filter(Setting.key == setting["key"]).first()
+            if not exists:
+                db.add(Setting(key=setting["key"], value=setting["value"]))
+        db.commit()
+    finally:
+        db.close()
+
+# アプリ起動時に実行
+init_settings()
 
 scheduler = BackgroundScheduler()
 def update_priority():
@@ -36,10 +58,37 @@ def update_priority():
         db.commit()
     finally:
         db.close()
+
+
+def check_and_notify():
+    db = SessionLocal()
+    try:
+        # DBからlast_notified_atを取得
+        setting = db.query(Setting).filter(Setting.key == "last_notified_at").first()
+        last_notified_at = datetime.fromisoformat(setting.value) if setting.value else None
+
+        query = db.query(Todo).filter(Todo.is_deleted == False)
+        if last_notified_at:
+            query = query.filter(Todo.updated_at > last_notified_at)
+        
+        updated = query.first()
+        if updated:
+            update_priority()
+            # TODO: LINE通知（後で実装）
+            print("変更検知！優先度更新したよ")
+            # DBにlast_notified_atを保存
+            setting.value = datetime.now().isoformat()
+            db.commit()
+    finally:
+        db.close()
+
+# スケジューラ2本立て
 if os.getenv("ENV") == "development":
     scheduler.add_job(update_priority, "interval", minutes=1)
+    scheduler.add_job(check_and_notify, "interval", minutes=1)
 else:
     scheduler.add_job(update_priority, "cron", hour=0, minute=0)
+    scheduler.add_job(check_and_notify, "interval", minutes=5)
 
 scheduler.start()
 
