@@ -5,6 +5,10 @@ from fastapi import FastAPI, HTTPException, Depends
 from sqlalchemy.orm import Session
 from apscheduler.schedulers.background import BackgroundScheduler
 from datetime import date
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
 def get_db():
@@ -32,8 +36,11 @@ def update_priority():
         db.commit()
     finally:
         db.close()
+if os.getenv("ENV") == "development":
+    scheduler.add_job(update_priority, "interval", minutes=1)
+else:
+    scheduler.add_job(update_priority, "cron", hour=0, minute=0)
 
-scheduler.add_job(update_priority, "interval", minutes=1)
 scheduler.start()
 
 @app.get("/todos")
