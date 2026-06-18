@@ -94,7 +94,7 @@ scheduler.start()
 
 @app.get("/todos")
 def get_todos(db: Session = Depends(get_db)):
-    return db.query(Todo).all()
+    return db.query(Todo).filter(Todo.is_deleted == False).all()
 
 @app.post("/todos", status_code=201)
 def create_todo(todo: TodoCreate, db: Session = Depends(get_db)):
@@ -124,9 +124,23 @@ def update_todo(todo_id: int, todo: TodoCreate, db: Session = Depends(get_db)):
 
 @app.delete("/todos/{todo_id}")
 def delete_todo(todo_id: int, db: Session = Depends(get_db)):
-    db_todo = db.query(Todo).filter(Todo.id == todo_id).first()
+    db_todo = db.query(Todo).filter(Todo.id == todo_id, Todo.is_deleted == False).first()
     if not db_todo:
         raise HTTPException(status_code=404, detail="そのIDは存在しないよ！")
-    db.delete(db_todo)
+    db_todo.is_deleted = True
     db.commit()
-    return {"message": "削除したよ！"} 
+    return {"message": "削除したよ！"}
+
+@app.get("/settings")
+def get_settings(db: Session = Depends(get_db)):
+    return db.query(Setting).all()
+
+@app.put("/settings/{key}")
+def update_setting(key: str, value: str, db: Session = Depends(get_db)):
+    setting = db.query(Setting).filter(Setting.key == key).first()
+    if not setting:
+        raise HTTPException(status_code=404, detail="そのキーは存在しないよ！")
+    setting.value = value
+    db.commit()
+    db.refresh(setting)
+    return setting
