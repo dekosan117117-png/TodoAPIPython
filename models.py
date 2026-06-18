@@ -18,4 +18,11 @@ class Setting(Base):
     key = Column(String, unique=True)
     value = Column(String, nullable=True)
 
+class User(Base):
+    __tablename__ = "users"
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String, unique=True, index=True)
+    hashed_password = Column(String)
+    is_active = Column(Boolean, default=True)
+
 Base.metadata.create_all(bind=engine)
