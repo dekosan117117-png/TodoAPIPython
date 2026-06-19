@@ -9,6 +9,7 @@ from schemas import TodoCreate, UserCreate, UserLogin, Token
 from models import Todo, Setting, User
 from database import SessionLocal, engine
 from auth import verify_password, get_password_hash, create_access_token, decode_access_token
+from sqlalchemy import text
 
 load_dotenv()
 
@@ -164,3 +165,8 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
         raise HTTPException(status_code=401, detail="ユーザー名かパスワードが違うよ！")
     token = create_access_token({"sub": db_user.username})
     return Token(access_token=token, token_type="bearer")
+
+@app.get("/health")
+def health_check(db: Session = Depends(get_db)):
+    db.execute(text("SELECT 1"))
+    return {"status": "ok"}
