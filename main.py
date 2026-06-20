@@ -10,6 +10,7 @@ from models import Todo, Setting, User
 from database import SessionLocal, engine
 from auth import verify_password, get_password_hash, create_access_token, decode_access_token
 from sqlalchemy import text
+from fastapi.middleware.cors import CORSMiddleware
 
 load_dotenv()
 
@@ -32,6 +33,14 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     return user
 
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 def init_settings():
     db = SessionLocal()
