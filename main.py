@@ -170,3 +170,7 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
 def health_check(db: Session = Depends(get_db)):
     db.execute(text("SELECT 1"))
     return {"status": "ok"}
+
+@app.get("/")
+def root():
+    return {"message": "ok"}
