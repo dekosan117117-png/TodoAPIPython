@@ -1,8 +1,9 @@
 from datetime import datetime, timedelta
 from jose import JWTError, jwt
 from passlib.context import CryptContext
+import os
 
-SECRET_KEY = "your-secret-key-here"
+SECRET_KEY = os.getenv("SECRET_KEY", "fallback-dev-key")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
