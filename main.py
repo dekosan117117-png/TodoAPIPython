@@ -39,7 +39,7 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:5173",  # 開発
         "http://localhost:4173",  # プレビュー
-        # 本番URLは後で追加
+        "https://todo-frontend-rot7.vercel.app",  # 本番URL
     ],
     allow_credentials=True,
     allow_methods=["*"],
