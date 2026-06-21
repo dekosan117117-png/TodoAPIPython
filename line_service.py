@@ -2,7 +2,8 @@ import os
 import requests
 from fastapi import Request
 from database import SessionLocal
-from models import Todo
+from models import Todo, Setting
+from datetime import datetime
 
 def send_line_message(text: str):
     token = os.getenv("LINE_CHANNEL_ACCESS_TOKEN")
@@ -89,6 +90,12 @@ async def handle_webhook(request: Request):
                 if todo:
                     todo.done = True
                     db.commit()
+                    # last_notified_atを更新して変更通知を抑制する
+                    notify_setting = db.query(Setting).filter(Setting.key == "last_notified_at").first()
+                    if notify_setting:
+                        notify_setting.value = datetime.now().isoformat()
+                    db.commit()
+
                     remaining = db.query(Todo).filter(Todo.is_deleted == False, Todo.done == False).all()
                     if remaining:
                         lines = [f"「{todo.title}」を完了にしたよ！✅\n\n📋 残りのタスク"]
