@@ -11,6 +11,7 @@ from database import SessionLocal, engine
 from auth import verify_password, get_password_hash, create_access_token, decode_access_token
 from sqlalchemy import text
 from fastapi.middleware.cors import CORSMiddleware
+import requests
 
 load_dotenv()
 
@@ -64,6 +65,24 @@ def init_settings():
     finally:
         db.close()
 
+def send_line_message(text: str):
+    token = os.getenv("LINE_CHANNEL_ACCESS_TOKEN")
+    user_id = os.getenv("LINE_USER_ID")
+    if not token or not user_id:
+        print("LINE設定がないよ")
+        return
+    requests.post(
+        "https://api.line.me/v2/bot/message/push",
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        },
+        json={
+            "to": user_id,
+            "messages": [{"type": "text", "text": text}]
+        }
+    )
+
 init_settings()
 
 scheduler = BackgroundScheduler()
@@ -93,17 +112,54 @@ def check_and_notify():
         if updated:
             update_priority()
             print("変更検知！優先度更新したよ")
+            send_line_message("📝 タスクが更新されたよ！優先度を見直したよ")
             setting.value = datetime.now().isoformat()
             db.commit()
+    finally:
+        db.close()
+
+def notify_daily():
+    db = SessionLocal()
+    try:
+        todos = db.query(Todo).filter(Todo.is_deleted == False, Todo.done == False).all()
+        if not todos:
+            return
+        lines = ["📋 今日のタスク一覧"]
+        for todo in todos:
+            expiry = f"（期限：{todo.expiry_date}）" if todo.expiry_date else ""
+            lines.append(f"・{todo.title}　優先度:{todo.priority}{expiry}")
+        send_line_message("\n".join(lines))
+    finally:
+        db.close()
+
+def renotify_high_priority():
+    db = SessionLocal()
+    try:
+        todos = db.query(Todo).filter(
+            Todo.is_deleted == False,
+            Todo.done == False,
+            Todo.priority >= 3
+        ).all()
+        if not todos:
+            return
+        lines = ["🔥 優先度高タスク再通知"]
+        for todo in todos:
+            expiry = f"（期限：{todo.expiry_date}）" if todo.expiry_date else ""
+            lines.append(f"・{todo.title}　優先度:{todo.priority}{expiry}")
+        send_line_message("\n".join(lines))
     finally:
         db.close()
 
 if os.getenv("ENV") == "development":
     scheduler.add_job(update_priority, "interval", minutes=1)
     scheduler.add_job(check_and_notify, "interval", minutes=1)
+    scheduler.add_job(notify_daily, "interval", minutes=2)
+    scheduler.add_job(renotify_high_priority, "interval", minutes=3)
 else:
     scheduler.add_job(update_priority, "cron", hour=0, minute=0)
     scheduler.add_job(check_and_notify, "interval", minutes=5)
+    scheduler.add_job(notify_daily, "cron", hour=8, minute=0)
+    scheduler.add_job(renotify_high_priority, "cron", hour=14, minute=0)
 
 scheduler.start()
 
