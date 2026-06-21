@@ -97,7 +97,7 @@ def send_line_reply(reply_token: str, messages: list):
             "messages": messages
         }
     )
-    
+
 init_settings()
 
 scheduler = BackgroundScheduler()
@@ -127,7 +127,12 @@ def check_and_notify():
         if updated:
             update_priority()
             print("変更検知！優先度更新したよ")
-            send_line_message("📝 タスクが更新されたよ！優先度を見直したよ")
+            todos = db.query(Todo).filter(Todo.is_deleted == False, Todo.done == False).all()
+            lines = ["📝 タスクが更新されたよ！\n\n📋 現在のタスク一覧"]
+            for i, todo in enumerate(todos, 1):
+                expiry = f"（期限：{todo.expiry_date}）" if todo.expiry_date else ""
+                lines.append(f"{i}. {todo.title}　優先度:{todo.priority}{expiry}")
+            send_line_message("\n".join(lines) if todos else "📝 タスクが更新されたよ！未完了タスクはないよ！")
             setting.value = datetime.now().isoformat()
             db.commit()
     finally:
@@ -232,7 +237,15 @@ async def webhook(request: Request):
                 if todo:
                     todo.done = True
                     db.commit()
-                    send_line_reply(reply_token, [{"type": "text", "text": f"「{todo.title}」を完了にしたよ！"}])
+                    remaining = db.query(Todo).filter(Todo.is_deleted == False, Todo.done == False).all()
+                    if remaining:
+                        lines = [f"「{todo.title}」を完了にしたよ！✅\n\n📋 残りのタスク"]
+                        for i, t in enumerate(remaining, 1):
+                            expiry = f"（期限：{t.expiry_date}）" if t.expiry_date else ""
+                            lines.append(f"{i}. {t.title}　優先度:{t.priority}{expiry}")
+                        send_line_reply(reply_token, [{"type": "text", "text": "\n".join(lines)}])
+                    else:
+                        send_line_reply(reply_token, [{"type": "text", "text": f"「{todo.title}」を完了にしたよ！✅\n\n全タスク完了！🎉"}])
                 else:
                     send_line_reply(reply_token, [{"type": "text", "text": "タスクが見つからなかったよ！"}])
             finally:
