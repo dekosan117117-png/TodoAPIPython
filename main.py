@@ -12,6 +12,7 @@ from auth import verify_password, get_password_hash, create_access_token, decode
 from sqlalchemy import text
 from fastapi.middleware.cors import CORSMiddleware
 import requests
+from fastapi import Request
 
 load_dotenv()
 
@@ -83,6 +84,20 @@ def send_line_message(text: str):
         }
     )
 
+def send_line_reply(reply_token: str, messages: list):
+    token = os.getenv("LINE_CHANNEL_ACCESS_TOKEN")
+    requests.post(
+        "https://api.line.me/v2/bot/message/reply",
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        },
+        json={
+            "replyToken": reply_token,
+            "messages": messages
+        }
+    )
+    
 init_settings()
 
 scheduler = BackgroundScheduler()
@@ -162,6 +177,68 @@ else:
     scheduler.add_job(renotify_high_priority, "cron", hour=14, minute=0)
 
 scheduler.start()
+
+@app.post("/webhook")
+async def webhook(request: Request):
+    body = await request.json()
+    events = body.get("events", [])
+    
+    for event in events:
+        if event.get("type") != "message":
+            continue
+        if event.get("message", {}).get("type") != "text":
+            continue
+        
+        reply_token = event.get("replyToken")
+        text = event.get("message", {}).get("text", "").strip()
+        
+        if text == "完了":
+            db = SessionLocal()
+            try:
+                todos = db.query(Todo).filter(
+                    Todo.is_deleted == False,
+                    Todo.done == False
+                ).all()
+                
+                if not todos:
+                    send_line_reply(reply_token, [{"type": "text", "text": "未完了のタスクはないよ！"}])
+                    continue
+                
+                quick_replies = [
+                    {
+                        "type": "action",
+                        "action": {
+                            "type": "message",
+                            "label": todo.title[:20],
+                            "text": f"完了:{todo.id}"
+                        }
+                    }
+                    for todo in todos[:13]  # クイックリプライは最大13個
+                ]
+                
+                send_line_reply(reply_token, [{
+                    "type": "text",
+                    "text": "どのタスクを完了する？",
+                    "quickReply": {"items": quick_replies}
+                }])
+            finally:
+                db.close()
+        
+        elif text.startswith("完了:"):
+            todo_id = int(text.split(":")[1])
+            db = SessionLocal()
+            try:
+                todo = db.query(Todo).filter(Todo.id == todo_id).first()
+                if todo:
+                    todo.done = True
+                    db.commit()
+                    send_line_reply(reply_token, [{"type": "text", "text": f"「{todo.title}」を完了にしたよ！"}])
+                else:
+                    send_line_reply(reply_token, [{"type": "text", "text": "タスクが見つからなかったよ！"}])
+            finally:
+                db.close()
+    
+    return {"status": "ok"}
 
 @app.get("/todos")
 def get_todos(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
