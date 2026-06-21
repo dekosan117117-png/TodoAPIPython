@@ -4,6 +4,19 @@ from fastapi import Request
 from database import SessionLocal
 from models import Todo, Setting
 from datetime import datetime
+import hmac
+import hashlib
+import base64
+
+def verify_signature(body: bytes, signature: str) -> bool:
+    channel_secret = os.getenv("LINE_CHANNEL_SECRET", "")
+    hash = hmac.new(
+        channel_secret.encode("utf-8"),
+        body,
+        hashlib.sha256
+    ).digest()
+    expected = base64.b64encode(hash).decode("utf-8")
+    return hmac.compare_digest(expected, signature)
 
 def send_line_message(text: str):
     token = os.getenv("LINE_CHANNEL_ACCESS_TOKEN")
@@ -38,6 +51,13 @@ def send_line_reply(reply_token: str, messages: list):
     )
 
 async def handle_webhook(request: Request):
+    body_bytes = await request.body()
+    signature = request.headers.get("X-Line-Signature", "")
+    
+    if not verify_signature(body_bytes, signature):
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail="署名が不正だよ！")
+    
     body = await request.json()
     events = body.get("events", [])
 
