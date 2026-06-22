@@ -6,6 +6,7 @@ from models import Todo, Setting
 from line_service import send_line_message
 
 def update_priority():
+    print("update_priority 実行")
     db = SessionLocal()
     try:
         # 今日すでに実行済みか確認
@@ -35,6 +36,7 @@ def update_priority():
         db.close()
 
 def check_and_notify():
+    print("check_and_notify 実行")
     db = SessionLocal()
     try:
         setting = db.query(Setting).filter(Setting.key == "last_notified_at").first()
@@ -58,6 +60,7 @@ def check_and_notify():
         db.close()
 
 def notify_daily():
+    print("notify_daily 実行")
     db = SessionLocal()
     try:
         # notify_hourをSettingから取得
@@ -102,6 +105,7 @@ def notify_daily():
         db.close()
 
 def renotify_high_priority():
+    print("renotify_high_priority 実行")
     db = SessionLocal()
     try:
         # renotify_hourをSettingから取得
