@@ -22,6 +22,9 @@ def init_settings():
             {"key": "notify_enabled", "value": "true"},
             {"key": "last_notified_at", "value": None},
             {"key": "line_user_id", "value": None},
+            {"key": "last_renotified_date", "value": None},
+            {"key": "last_notified_daily_date", "value": None},
+            {"key": "last_priority_updated_date", "value": None},
         ]
         for setting in default_settings:
             exists = db.query(Setting).filter(Setting.key == setting["key"]).first()

@@ -8,12 +8,28 @@ from line_service import send_line_message
 def update_priority():
     db = SessionLocal()
     try:
+        # 今日すでに実行済みか確認
+        today = date.today().isoformat()
+        last_updated = db.query(Setting).filter(
+            Setting.key == "last_priority_updated_date"
+        ).first()
+
+        if last_updated and last_updated.value == today:
+            return
+
         todos = db.query(Todo).all()
         for todo in todos:
             if todo.expiry_date and (todo.expiry_date - date.today()).days < 3:
                 todo.priority = 5
             elif todo.expiry_date and (todo.expiry_date - date.today()).days < 5:
                 todo.priority = 3
+        db.commit()
+
+        # 実行済みを記録
+        if last_updated:
+            last_updated.value = today
+        else:
+            db.add(Setting(key="last_priority_updated_date", value=today))
         db.commit()
     finally:
         db.close()
@@ -44,32 +60,90 @@ def check_and_notify():
 def notify_daily():
     db = SessionLocal()
     try:
-        todos = db.query(Todo).filter(Todo.is_deleted == False, Todo.done == False).all()
+        # notify_hourをSettingから取得
+        notify_setting = db.query(Setting).filter(
+            Setting.key == "notify_hour"
+        ).first()
+        notify_hour = int(notify_setting.value) if notify_setting else 8
+
+        # cronからintervalに変えるので時刻チェックが必要
+        if datetime.now().hour != notify_hour:
+            return
+
+        # 今日すでに送ったか確認
+        today = date.today().isoformat()
+        last_notified_daily = db.query(Setting).filter(
+            Setting.key == "last_notified_daily_date"
+        ).first()
+
+        if last_notified_daily and last_notified_daily.value == today:
+            return
+
+        todos = db.query(Todo).filter(
+            Todo.is_deleted == False, 
+            Todo.done == False
+        ).all()
+
         if not todos:
             return
+
         lines = ["📋 今日のタスク一覧"]
         for todo in todos:
             expiry = f"（期限：{todo.expiry_date}）" if todo.expiry_date else ""
             lines.append(f"・{todo.title}　優先度:{todo.priority}{expiry}")
         send_line_message("\n".join(lines))
+
+        if last_notified_daily:
+            last_notified_daily.value = today
+        else:
+            db.add(Setting(key="last_notified_daily_date", value=today))
+        db.commit()
     finally:
         db.close()
 
 def renotify_high_priority():
     db = SessionLocal()
     try:
+        # renotify_hourをSettingから取得
+        renotify_setting = db.query(Setting).filter(
+            Setting.key == "renotify_hour"
+        ).first()
+        renotify_hour = int(renotify_setting.value) if renotify_setting else 14
+
+        # 指定時刻過ぎてるか確認
+        if datetime.now().hour < renotify_hour:
+            return
+
+        # 今日すでに再通知送ったか確認
+        today = date.today().isoformat()
+        last_renotified = db.query(Setting).filter(
+            Setting.key == "last_renotified_date"
+        ).first()
+
+        if last_renotified and last_renotified.value == today:
+            return
+
         todos = db.query(Todo).filter(
             Todo.is_deleted == False,
             Todo.done == False,
             Todo.priority >= 3
         ).all()
+
         if not todos:
             return
+
         lines = ["🔥 優先度高タスク再通知"]
         for todo in todos:
             expiry = f"（期限：{todo.expiry_date}）" if todo.expiry_date else ""
             lines.append(f"・{todo.title}　優先度:{todo.priority}{expiry}")
         send_line_message("\n".join(lines))
+
+        # 今日送ったことを記録
+        if last_renotified:
+            last_renotified.value = today
+        else:
+            db.add(Setting(key="last_renotified_date", value=today))
+        db.commit()
     finally:
         db.close()
 
@@ -81,8 +155,8 @@ def create_scheduler():
         scheduler.add_job(notify_daily, "interval", minutes=2)
         scheduler.add_job(renotify_high_priority, "interval", minutes=3)
     else:
-        scheduler.add_job(update_priority, "cron", hour=0, minute=0)
+        scheduler.add_job(update_priority, "interval", minutes=5)
         scheduler.add_job(check_and_notify, "interval", minutes=5)
-        scheduler.add_job(notify_daily, "cron", hour=8, minute=0)
-        scheduler.add_job(renotify_high_priority, "cron", hour=14, minute=0)
+        scheduler.add_job(notify_daily, "interval", minutes=5)
+        scheduler.add_job(renotify_high_priority, "interval", minutes=5)
     return scheduler
