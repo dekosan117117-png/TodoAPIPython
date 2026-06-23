@@ -12,7 +12,7 @@ def update_priority():
     db = SessionLocal()
     try:
         # 今日すでに実行済みか確認
-        today = date.today(JST).isoformat()
+        today = datetime.now(JST).date().isoformat()
         last_updated = db.query(Setting).filter(
             Setting.key == "last_priority_updated_date"
         ).first()
@@ -22,9 +22,9 @@ def update_priority():
 
         todos = db.query(Todo).all()
         for todo in todos:
-            if todo.expiry_date and (todo.expiry_date - date.today(JST)).days < 3:
+            if todo.expiry_date and (todo.expiry_date - datetime.now(JST).date()).days < 3:
                 todo.priority = 5
-            elif todo.expiry_date and (todo.expiry_date - date.today(JST)).days < 5:
+            elif todo.expiry_date and (todo.expiry_date - datetime.now(JST).date()).days < 5:
                 todo.priority = 3
         db.commit()
 
@@ -124,7 +124,7 @@ def renotify_high_priority():
             return
 
         # 今日すでに再通知送ったか確認
-        today = date.today().isoformat()
+        today = datetime.now(JST).date().isoformat()
         last_renotified = db.query(Setting).filter(
             Setting.key == "last_renotified_date"
         ).first()
