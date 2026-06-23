@@ -4,13 +4,15 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from database import SessionLocal
 from models import Todo, Setting
 from line_service import send_line_message
+from datetime import timezone, timedelta
+JST = timezone(timedelta(hours=9))
 
 def update_priority():
     print("update_priority 実行")
     db = SessionLocal()
     try:
         # 今日すでに実行済みか確認
-        today = date.today().isoformat()
+        today = date.today(JST).isoformat()
         last_updated = db.query(Setting).filter(
             Setting.key == "last_priority_updated_date"
         ).first()
@@ -20,9 +22,9 @@ def update_priority():
 
         todos = db.query(Todo).all()
         for todo in todos:
-            if todo.expiry_date and (todo.expiry_date - date.today()).days < 3:
+            if todo.expiry_date and (todo.expiry_date - date.today(JST)).days < 3:
                 todo.priority = 5
-            elif todo.expiry_date and (todo.expiry_date - date.today()).days < 5:
+            elif todo.expiry_date and (todo.expiry_date - date.today(JST)).days < 5:
                 todo.priority = 3
         db.commit()
 
@@ -67,9 +69,9 @@ def notify_daily():
             Setting.key == "notify_hour"
         ).first()
         notify_hour = int(notify_setting.value) if notify_setting else 8
-        print(f"notify_hour: {notify_hour}, 現在時刻: {datetime.now().hour}")
+        print(f"notify_hour: {notify_hour}, 現在時刻: {datetime.now(JST).hour}")
 
-        if datetime.now().hour != notify_hour:
+        if datetime.now(JST).hour != notify_hour:
             print("時刻不一致でスキップ")
             return
 
@@ -118,7 +120,7 @@ def renotify_high_priority():
         renotify_hour = int(renotify_setting.value) if renotify_setting else 14
 
         # 指定時刻過ぎてるか確認
-        if datetime.now().hour < renotify_hour:
+        if datetime.now(JST).hour < renotify_hour:
             return
 
         # 今日すでに再通知送ったか確認

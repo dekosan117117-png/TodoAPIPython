@@ -24,7 +24,7 @@ def send_line_message(text: str):
     if not token or not user_id:
         print("LINE設定がないよ")
         return
-    requests.post(
+    response = requests.post(
         "https://api.line.me/v2/bot/message/push",
         headers={
             "Authorization": f"Bearer {token}",
