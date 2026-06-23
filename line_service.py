@@ -35,6 +35,7 @@ def send_line_message(text: str):
             "messages": [{"type": "text", "text": text}]
         }
     )
+    print(f"LINE送信結果: {response.status_code} {response.text}")
 
 def send_line_reply(reply_token: str, messages: list):
     token = os.getenv("LINE_CHANNEL_ACCESS_TOKEN")
