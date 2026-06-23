@@ -63,31 +63,34 @@ def notify_daily():
     print("notify_daily 実行")
     db = SessionLocal()
     try:
-        # notify_hourをSettingから取得
         notify_setting = db.query(Setting).filter(
             Setting.key == "notify_hour"
         ).first()
         notify_hour = int(notify_setting.value) if notify_setting else 8
+        print(f"notify_hour: {notify_hour}, 現在時刻: {datetime.now().hour}")
 
-        # cronからintervalに変えるので時刻チェックが必要
         if datetime.now().hour != notify_hour:
+            print("時刻不一致でスキップ")
             return
 
-        # 今日すでに送ったか確認
         today = date.today().isoformat()
         last_notified_daily = db.query(Setting).filter(
             Setting.key == "last_notified_daily_date"
         ).first()
+        print(f"last_notified_daily: {last_notified_daily.value if last_notified_daily else None}")
 
         if last_notified_daily and last_notified_daily.value == today:
+            print("今日分送信済みでスキップ")
             return
 
         todos = db.query(Todo).filter(
-            Todo.is_deleted == False, 
+            Todo.is_deleted == False,
             Todo.done == False
         ).all()
+        print(f"未完了タスク件数: {len(todos)}")
 
         if not todos:
+            print("タスクなしでスキップ")
             return
 
         lines = ["📋 今日のタスク一覧"]
